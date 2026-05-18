@@ -112,4 +112,21 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
+// POST — analizar candidatos con Gemini
+router.post('/analyze', auth, async (req, res) => {  
+  try {    
+    const { candidates, job_title } = req.body;    
+    const { analizarCandidatos } = require('../services/gemini');        
+    const analizados = await analizarCandidatos(candidates, {      
+      title: job_title,      
+      description: `Se busca ${job_title}`,      
+      category: job_title,      
+      city: '',    
+    });    
+    res.json(analizados);  
+  } catch (err) {    
+    res.status(500).json({ error: err.message });  
+  }
+});
+
 module.exports = router;
