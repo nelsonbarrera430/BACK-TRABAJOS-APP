@@ -2,9 +2,8 @@ const db = require('../db');
 
 async function notificarCandidatos(category, city, job) {
   try {
-    // Buscar candidatos con tokens que coincidan y tengan notificaciones activas
     const result = await db.query(
-      `SELECT dt.fcm_token, u.email
+      `SELECT dt.fcm_token
        FROM device_tokens dt
        JOIN users u ON u.id = dt.user_id
        JOIN candidate_profiles cp ON cp.user_id = u.id
@@ -21,13 +20,12 @@ async function notificarCandidatos(category, city, job) {
 
     if (tokens.length === 0) return;
 
-    // Enviar con Firebase Admin
     try {
       const admin = require('firebase-admin');
 
-      // Inicializar solo una vez
       if (!admin.apps.length) {
-        const serviceAccount = require('../../serviceAccountKey.json');
+        // Leer desde variable de entorno en Render
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
@@ -50,7 +48,7 @@ async function notificarCandidatos(category, city, job) {
 
       console.log(`✅ Notificaciones enviadas a ${tokens.length} dispositivos`);
     } catch (firebaseErr) {
-      console.log('⚠️ Firebase no configurado aún:', firebaseErr.message);
+      console.log('⚠️ Firebase error:', firebaseErr.message);
     }
 
   } catch (err) {
