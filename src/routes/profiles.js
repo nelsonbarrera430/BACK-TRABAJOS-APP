@@ -25,26 +25,37 @@ router.get('/me', auth, async (req, res) => {
 router.get('/workers', async (req, res) => {  
   try {    
     const { city, category, title, description } = req.query;    
+    // Obtener user_id del token si existe    
+    let excludeUserId = null;    
+    try {      
+      const header = req.headers.authorization;      
+      if (header && header.startsWith('Bearer ')) {        
+        const jwt = require('jsonwebtoken');        
+        const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);        
+        excludeUserId = decoded.id;      
+      }    
+    } catch (_) {}    
     const result = await db.query(      
       `SELECT cp.id, cp.full_name, cp.job_category, cp.city,              
               cp.years_experience, cp.rating, cp.total_reviews, cp.summary       
        FROM candidate_profiles cp       
        JOIN users u ON u.id = cp.user_id       
        WHERE u.role = 'CANDIDATO'         
-         AND LOWER(cp.city)         = LOWER($1)         
-         AND LOWER(cp.job_category) = LOWER($2)       
+         AND LOWER(cp.city) = LOWER($1)         
+         AND LOWER(cp.job_category) = LOWER($2)         
+         AND cp.open_to_work = true         
+         AND ($3::uuid IS NULL OR u.id != $3::uuid)       
        ORDER BY cp.rating DESC`,      
-      [city, category]    
+      [city, category, excludeUserId]    
     );    
     let candidatos = result.rows;    
-    // Analizar con Gemini si hay candidatos    
     if (candidatos.length > 0) {      
       const { analizarCandidatos } = require('../services/gemini');      
       candidatos = await analizarCandidatos(candidatos, {        
-        title:       title       || `Se busca ${category}`,        
+        title: title || `Se busca ${category}`,        
         description: description || `Se busca ${category} en ${city}`,        
-        category,        
-        city,      });    
+        category, city,      
+      });    
     }    
     res.json(candidatos);  
   } catch (err) {    
