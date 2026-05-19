@@ -31,6 +31,44 @@ router.post('/:jobId', auth, async (req, res) => {
       [jobId, candidateId, cvUrl]
     );
 
+    // Notificar al publicador que alguien se postuló
+    const jobInfo = await db.query(
+      `SELECT j.title, j.company_id, cp2.user_id, u2.email   
+       FROM jobs j   
+       JOIN company_profiles cp2 ON j.company_id = cp2.id   
+       JOIN users u2 ON cp2.user_id = u2.id   
+       WHERE j.id = $1`,
+      [jobId]
+    );
+    if (jobInfo.rows.length > 0) {  
+      const publisherUserId = jobInfo.rows[0].user_id;  
+      const tokens = await db.query(    
+        'SELECT fcm_token FROM device_tokens WHERE user_id = $1',    
+        [publisherUserId]  
+      );  
+      const fcmTokens = tokens.rows.map(r => r.fcm_token).filter(Boolean);  
+      if (fcmTokens.length > 0) {    
+        try {      
+          const admin = require('firebase-admin');      
+          if (!admin.apps.length) {        
+            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);        
+            admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });      
+          }      
+          await admin.messaging().sendEachForMulticast({        
+            tokens: fcmTokens,        
+            notification: {          
+              title: '👤 Nuevo postulante!',          
+              body: `Alguien se postuló a: ${jobInfo.rows[0].title}`,        
+            },        
+            data: { job_id: jobId, type: 'NEW_APPLICANT' },        
+            android: { notification: { sound: 'default', priority: 'high' }, priority: 'high' },      
+          });    
+        } catch (firebaseErr) {      
+          console.log('Firebase error:', firebaseErr.message);    
+        }  
+      }
+    }
+
     res.status(201).json({
       message: '¡Postulación enviada!',
       application: result.rows[0]
