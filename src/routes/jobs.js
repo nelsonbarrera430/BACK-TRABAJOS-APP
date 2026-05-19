@@ -100,7 +100,8 @@ router.get('/:id', async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { title, description, job_type, category,
-            city, requires_cv, min_experience } = req.body;
+            city, requires_cv, min_experience,
+            address, problem_description } = req.body;
 
     let comp = await db.query(
       'SELECT id FROM company_profiles WHERE user_id = $1', [req.user.id]
@@ -117,10 +118,12 @@ router.post('/', auth, async (req, res) => {
 
     const result = await db.query(
       `INSERT INTO jobs
-       (company_id, title, description, job_type, category, city, requires_cv, min_experience)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+       (company_id, title, description, job_type, category, city,
+        requires_cv, min_experience, address, problem_description)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [comp.rows[0].id, title, description, job_type, category,
-       city, requires_cv || false, min_experience || 0]
+       city, requires_cv || false, min_experience || 0,
+       address || '', problem_description || '']
     );
 
     const { notificarCandidatos } = require('../services/fcm');
