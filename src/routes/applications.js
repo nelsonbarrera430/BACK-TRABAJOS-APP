@@ -167,4 +167,25 @@ router.post('/analyze', auth, async (req, res) => {
   }
 });
 
+// GET postulantes de una búsqueda urgente por job_id
+router.get('/urgent/:jobId', auth, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT a.id, a.status, a.created_at,
+              cp.id as candidate_id, cp.full_name, cp.years_experience,
+              cp.rating, cp.total_reviews, cp.summary, cp.job_category,
+              cp.cv_url, u.email
+       FROM applications a
+       JOIN candidate_profiles cp ON a.candidate_id = cp.id
+       JOIN users u ON cp.user_id = u.id
+       WHERE a.job_id = $1
+       ORDER BY a.created_at DESC`,
+      [req.params.jobId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
