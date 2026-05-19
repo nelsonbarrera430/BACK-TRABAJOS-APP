@@ -173,4 +173,26 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
+// GET — todas mis vacantes publicadas (cualquier tipo)
+router.get('/my-posts', auth, async (req, res) => {
+  try {
+    let comp = await db.query(
+      'SELECT id FROM company_profiles WHERE user_id=$1', [req.user.id]
+    );
+    if (comp.rows.length === 0) return res.json([]);
+    const result = await db.query(
+      `SELECT j.*, 
+         (SELECT COUNT(*) FROM applications a WHERE a.job_id = j.id) as applicants_count 
+       FROM jobs j 
+       WHERE j.company_id = $1 
+         AND j.is_cancelled = false 
+       ORDER BY j.created_at DESC`,
+      [comp.rows[0].id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
