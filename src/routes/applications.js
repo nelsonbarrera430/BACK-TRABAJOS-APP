@@ -86,8 +86,8 @@ router.get('/company/:jobId', auth, async (req, res) => {
               cp.total_reviews, cp.summary, cp.job_category, cp.city,
               cp.cv_url as profile_cv, u.id as user_id, u.email
        FROM applications a
-       JOIN candidate_profiles cp ON a.candidate_id = cp.id
-       JOIN users u ON cp.user_id = u.id
+       LEFT JOIN candidate_profiles cp ON a.candidate_id = cp.id
+       LEFT JOIN users u ON cp.user_id = u.id
        WHERE a.job_id = $1
        ORDER BY
          CASE WHEN a.ai_score IS NOT NULL THEN a.ai_score ELSE -1 END DESC,
