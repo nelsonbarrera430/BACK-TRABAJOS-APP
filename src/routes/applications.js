@@ -2,10 +2,10 @@ const router = require('express').Router();
 const db     = require('../db');
 const auth   = require('../middleware/auth');
 
-// POST — analizar candidatos con Gemini (debe ir ANTES de /:jobId)
+// POST — analizar candidatos con Gemini (DEBE ir antes de /:jobId)
 router.post('/analyze', auth, async (req, res) => {
   try {
-    const { candidates, job_title } = req.body;
+    const { candidates, job_title, job_id } = req.body;
     if (!candidates || candidates.length === 0)
       return res.status(400).json({ error: 'No hay candidatos para analizar' });
 
@@ -16,6 +16,21 @@ router.post('/analyze', auth, async (req, res) => {
       category: job_title,
       city: '',
     });
+
+    // Persistir ai_score y ai_feedback en la tabla applications
+    if (job_id) {
+      for (const a of analizados) {
+        if (a.ai_score != null) {
+          await db.query(
+            `UPDATE applications
+             SET ai_score=$1, ai_feedback=$2
+             WHERE job_id=$3 AND candidate_id=$4`,
+            [a.ai_score, a.ai_razon || '', job_id, a.id]
+          );
+        }
+      }
+    }
+
     res.json(analizados);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -64,14 +79,19 @@ router.post('/:jobId', auth, async (req, res) => {
 router.get('/company/:jobId', auth, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT a.*, cp.full_name, cp.years_experience, cp.rating,
+      `SELECT a.id, a.job_id, a.candidate_id, a.cv_url, a.status,
+              a.response_message, a.created_at,
+              a.ai_score, a.ai_feedback,
+              cp.full_name, cp.years_experience, cp.rating,
               cp.total_reviews, cp.summary, cp.job_category, cp.city,
               cp.cv_url as profile_cv, u.email
        FROM applications a
        JOIN candidate_profiles cp ON a.candidate_id = cp.id
        JOIN users u ON cp.user_id = u.id
        WHERE a.job_id = $1
-       ORDER BY a.created_at DESC`,
+       ORDER BY
+         CASE WHEN a.ai_score IS NOT NULL THEN a.ai_score ELSE -1 END DESC,
+         a.created_at DESC`,
       [req.params.jobId]
     );
     res.json(result.rows);
