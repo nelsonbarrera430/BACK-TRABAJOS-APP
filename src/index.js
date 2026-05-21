@@ -19,6 +19,7 @@ app.use('/api/profiles',      require('./routes/profiles'));
 app.use('/api/applications',  require('./routes/applications'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/messages',      require('./routes/messages'));
+app.use('/api/ratings',       require('./routes/ratings'));
 
 // Manejo de errores global
 app.use((err, req, res, next) => {
