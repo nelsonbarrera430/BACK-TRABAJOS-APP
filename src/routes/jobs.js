@@ -77,7 +77,12 @@ router.get('/mine', auth, async (req, res) => {
     );
     if (company.rows.length === 0) return res.json([]);
     const result = await db.query(
-      'SELECT * FROM jobs WHERE company_id = $1 ORDER BY created_at DESC',
+      `SELECT j.*,
+              (SELECT COUNT(*)::int FROM applications a
+               WHERE a.job_id = j.id) as applicants_count
+       FROM jobs j
+       WHERE j.company_id = $1
+       ORDER BY j.created_at DESC`,
       [company.rows[0].id]
     );
     res.json(result.rows);
