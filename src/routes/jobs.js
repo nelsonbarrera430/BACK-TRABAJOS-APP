@@ -2,10 +2,10 @@ const router = require('express').Router();
 const db     = require('../db');
 const auth   = require('../middleware/auth');
 
-// GET — empleos filtrados por ciudad del perfil
+// GET — empleos filtrados por ciudad, categoría y tipo
 router.get('/', async (req, res) => {
   try {
-    const { city, job_type, search } = req.query;
+    const { city, job_type, category, search } = req.query;
     let query = `
       SELECT j.*, COALESCE(cp.name, 'Particular') as company_name
       FROM jobs j
@@ -24,6 +24,10 @@ router.get('/', async (req, res) => {
       params.push(job_type);
       query += ` AND j.job_type = $${params.length}`;
     }
+    if (category) {
+      params.push(category);
+      query += ` AND LOWER(j.category) = LOWER($${params.length})`;
+    }
     if (search) {
       params.push(`%${search}%`);
       query += ` AND j.title ILIKE $${params.length}`;
@@ -36,10 +40,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET — urgentes filtradas por ciudad
+// GET — urgentes filtradas por ciudad y categoría
 router.get('/urgent', async (req, res) => {
   try {
-    const { city } = req.query;
+    const { city, category } = req.query;
     let query = `
       SELECT j.*, COALESCE(cp.name, 'Particular') as company_name
       FROM jobs j
@@ -52,6 +56,10 @@ router.get('/urgent', async (req, res) => {
     if (city) {
       params.push(city);
       query += ` AND LOWER(j.city) = LOWER($${params.length})`;
+    }
+    if (category) {
+      params.push(category);
+      query += ` AND LOWER(j.category) = LOWER($${params.length})`;
     }
     query += ' ORDER BY j.created_at DESC';
     const result = await db.query(query, params);
