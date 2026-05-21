@@ -2,6 +2,26 @@ const router = require('express').Router();
 const db     = require('../db');
 const auth   = require('../middleware/auth');
 
+// POST — analizar candidatos con Gemini (debe ir ANTES de /:jobId)
+router.post('/analyze', auth, async (req, res) => {
+  try {
+    const { candidates, job_title } = req.body;
+    if (!candidates || candidates.length === 0)
+      return res.status(400).json({ error: 'No hay candidatos para analizar' });
+
+    const { analizarCandidatos } = require('../services/gemini');
+    const analizados = await analizarCandidatos(candidates, {
+      title: job_title,
+      description: `Se busca ${job_title}`,
+      category: job_title,
+      city: '',
+    });
+    res.json(analizados);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST — postularse a una vacante
 router.post('/:jobId', auth, async (req, res) => {
   try {
@@ -30,44 +50,6 @@ router.post('/:jobId', auth, async (req, res) => {
        VALUES ($1,$2,$3) RETURNING *`,
       [jobId, candidateId, cvUrl]
     );
-
-    // Notificar al publicador que alguien se postuló
-    const jobInfo = await db.query(
-      `SELECT j.title, j.company_id, cp2.user_id, u2.email   
-       FROM jobs j   
-       JOIN company_profiles cp2 ON j.company_id = cp2.id   
-       JOIN users u2 ON cp2.user_id = u2.id   
-       WHERE j.id = $1`,
-      [jobId]
-    );
-    if (jobInfo.rows.length > 0) {  
-      const publisherUserId = jobInfo.rows[0].user_id;  
-      const tokens = await db.query(    
-        'SELECT fcm_token FROM device_tokens WHERE user_id = $1',    
-        [publisherUserId]  
-      );  
-      const fcmTokens = tokens.rows.map(r => r.fcm_token).filter(Boolean);  
-      if (fcmTokens.length > 0) {    
-        try {      
-          const admin = require('firebase-admin');      
-          if (!admin.apps.length) {        
-            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);        
-            admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });      
-          }      
-          await admin.messaging().sendEachForMulticast({        
-            tokens: fcmTokens,        
-            notification: {          
-              title: '👤 Nuevo postulante!',          
-              body: `Alguien se postuló a: ${jobInfo.rows[0].title}`,        
-            },        
-            data: { job_id: jobId, type: 'NEW_APPLICANT' },        
-            android: { notification: { sound: 'default', priority: 'high' }, priority: 'high' },      
-          });    
-        } catch (firebaseErr) {      
-          console.log('Firebase error:', firebaseErr.message);    
-        }  
-      }
-    }
 
     res.status(201).json({
       message: '¡Postulación enviada!',
@@ -143,44 +125,6 @@ router.get('/my', auth, async (req, res) => {
        WHERE a.candidate_id=$1
        ORDER BY a.created_at DESC`,
       [profile.rows[0].id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST — analizar candidatos con Gemini
-router.post('/analyze', auth, async (req, res) => {  
-  try {    
-    const { candidates, job_title } = req.body;    
-    const { analizarCandidatos } = require('../services/gemini');        
-    const analizados = await analizarCandidatos(candidates, {      
-      title: job_title,      
-      description: `Se busca ${job_title}`,      
-      category: job_title,      
-      city: '',    
-    });    
-    res.json(analizados);  
-  } catch (err) {    
-    res.status(500).json({ error: err.message });  
-  }
-});
-
-// GET postulantes de una búsqueda urgente por job_id
-router.get('/urgent/:jobId', auth, async (req, res) => {
-  try {
-    const result = await db.query(
-      `SELECT a.id, a.status, a.created_at,
-              cp.id as candidate_id, cp.full_name, cp.years_experience,
-              cp.rating, cp.total_reviews, cp.summary, cp.job_category,
-              cp.cv_url, u.email
-       FROM applications a
-       JOIN candidate_profiles cp ON a.candidate_id = cp.id
-       JOIN users u ON cp.user_id = u.id
-       WHERE a.job_id = $1
-       ORDER BY a.created_at DESC`,
-      [req.params.jobId]
     );
     res.json(result.rows);
   } catch (err) {
