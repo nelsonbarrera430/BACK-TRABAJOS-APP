@@ -50,12 +50,10 @@ Responde ÚNICAMENTE con este JSON sin markdown ni texto extra:
     const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     console.log('GEMINI TEXTO:', texto.substring(0, 300));
 
-    const limpio = texto
-      .replace(/```json/g, '')
-      .replace(/```/g, '')
-      .trim();
-
-    const resultado = JSON.parse(limpio);
+    // extraer solo el JSON aunque Gemini agregue texto extra
+    const match = texto.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Gemini no devolvió JSON válido');
+    const resultado = JSON.parse(match[0]);
 
     const ordenados = resultado.candidatos
       .sort((a, b) => b.score - a.score)
@@ -65,11 +63,11 @@ Responde ÚNICAMENTE con este JSON sin markdown ni texto extra:
         ai_razon: r.razon,
       }));
 
-    console.log(`✅ Gemini analizó ${ordenados.length} candidatos`);
+    console.log(` Gemini analizó ${ordenados.length} candidatos`);
     return ordenados;
 
   } catch (err) {
-    console.log('⚠️ Gemini falló, orden normal:', err.message);
+    console.log(' Gemini falló, orden normal:', err.message);
     return candidatos;
   }
 }
