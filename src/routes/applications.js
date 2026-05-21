@@ -84,7 +84,7 @@ router.get('/company/:jobId', auth, async (req, res) => {
               a.ai_score, a.ai_feedback,
               cp.full_name, cp.years_experience, cp.rating,
               cp.total_reviews, cp.summary, cp.job_category, cp.city,
-              cp.cv_url as profile_cv, u.email
+              cp.cv_url as profile_cv, u.id as user_id, u.email
        FROM applications a
        JOIN candidate_profiles cp ON a.candidate_id = cp.id
        JOIN users u ON cp.user_id = u.id
@@ -151,10 +151,12 @@ router.get('/my', auth, async (req, res) => {
 
     const result = await db.query(
       `SELECT a.*, j.title, j.city, j.job_type, j.category,
-              COALESCE(cp.name, 'Particular') as company_name
+              COALESCE(cp.name, 'Particular') as company_name,
+              cu.id as company_user_id
        FROM applications a
        JOIN jobs j ON a.job_id = j.id
        LEFT JOIN company_profiles cp ON j.company_id = cp.id
+       LEFT JOIN users cu ON cp.user_id = cu.id
        WHERE a.candidate_id=$1
        ORDER BY a.created_at DESC`,
       [profile.rows[0].id]
