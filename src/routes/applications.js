@@ -100,10 +100,10 @@ router.get('/company/:jobId', auth, async (req, res) => {
   }
 });
 
-// PUT — aceptar o rechazar postulante (estilo Didi)
+// PUT — aceptar o rechazar postulante
 router.put('/:applicationId/respond', auth, async (req, res) => {
   try {
-    const { status, message } = req.body; // ACEPTADO o RECHAZADO
+    const { status, message } = req.body;
     const { applicationId } = req.params;
 
     const result = await db.query(
@@ -113,16 +113,29 @@ router.put('/:applicationId/respond', auth, async (req, res) => {
       [status, message || '', applicationId]
     );
 
-    // Si acepta — marcar la vacante con el candidato aceptado
+    const app = result.rows[0];
+
     if (status === 'ACEPTADO') {
-      const app = result.rows[0];
+      // Marcar vacante como cerrada y guardar candidato aceptado
       await db.query(
-        'UPDATE jobs SET accepted_candidate_id=$1 WHERE id=$2',
+        `UPDATE jobs
+         SET accepted_candidate_id=$1, is_active=false
+         WHERE id=$2`,
         [app.candidate_id, app.job_id]
       );
+
+      // Obtener título del job para la notificación
+      const jobRes = await db.query(
+        'SELECT title FROM jobs WHERE id=$1', [app.job_id]
+      );
+      const jobTitle = jobRes.rows[0]?.title || 'la vacante';
+
+      // Enviar push al candidato aceptado (no bloqueante)
+      const { notificarAceptado } = require('../services/fcm');
+      notificarAceptado(app.candidate_id, jobTitle).catch(() => {});
     }
 
-    res.json({ message: `Candidato ${status.toLowerCase()}`, application: result.rows[0] });
+    res.json({ message: `Candidato ${status.toLowerCase()}`, application: app });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
