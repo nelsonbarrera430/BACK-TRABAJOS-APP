@@ -12,13 +12,25 @@ async function analizarCandidatos(candidatos, vacante) {
     const prompt = `Eres experto en selección de personal. Analiza estos candidatos para el puesto: ${vacante.title}.
 Categoría: ${vacante.category}
 
+CRITERIOS DE EVALUACIÓN (en orden de importancia):
+1. Rating de empleadores anteriores (1-5 estrellas) — indica historial real de trabajo
+2. Años de experiencia en el área
+3. Descripción/resumen del candidato
+
 CANDIDATOS:
-${candidatos.map((c, i) => `${i}. ${c.full_name || 'Sin nombre'} | ${c.years_experience || 0} años exp | rating: ${c.rating || 0}/5 | info: ${c.summary || 'ninguna'}`).join('\n')}
+${candidatos.map((c, i) => {
+  const rating = c.rating || 0;
+  const reviews = c.total_reviews || 0;
+  const ratingLabel = reviews > 0
+    ? `${rating}/5 ⭐ (${reviews} calificación${reviews !== 1 ? 'es' : ''})`
+    : 'Sin calificaciones aún';
+  return `${i}. ${c.full_name || 'Sin nombre'} | ${c.years_experience || 0} años exp | rating: ${ratingLabel} | info: ${c.summary || 'ninguna'}`;
+}).join('\n')}
 
 Responde ÚNICAMENTE con este JSON exacto, sin texto adicional ni markdown:
 {"candidatos":[{"indice":0,"score":85,"razon":"razón corta en español"}]}
 
-Donde score va de 0 a 100 según su idoneidad para ${vacante.title}.`;
+Donde score va de 0 a 100. Un candidato con rating 5/5 debe recibir bonus significativo en el score.`;
 
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
