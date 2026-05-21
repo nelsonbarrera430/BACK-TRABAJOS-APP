@@ -78,23 +78,64 @@ router.get('/mine', auth, async (req, res) => {
   }
 });
 
-// GET — todas mis vacantes publicadas (cualquier tipo)
-router.get('/my-posts', auth, async (req, res) => {
+// GET — estadísticas del publicador (ANTES de /:id)
+router.get('/stats', auth, async (req, res) => {
   try {
-    let comp = await db.query(
+    const comp = await db.query(
       'SELECT id FROM company_profiles WHERE user_id=$1', [req.user.id]
     );
-    if (comp.rows.length === 0) return res.json([]);
-    const result = await db.query(
-      `SELECT j.*, 
-         (SELECT COUNT(*) FROM applications a WHERE a.job_id = j.id) as applicants_count 
-       FROM jobs j 
-       WHERE j.company_id = $1 
-         AND j.is_cancelled = false 
-       ORDER BY j.created_at DESC`,
-      [comp.rows[0].id]
-    );
-    res.json(result.rows);
+    if (comp.rows.length === 0)
+      return res.json({
+        total_posts: 0, active_posts: 0, total_applicants: 0,
+        accepted: 0, by_type: { URGENTE: 0, EMPLEO: 0, PRACTICA: 0 },
+        top_job: null,
+      });
+
+    const companyId = comp.rows[0].id;
+
+    const [totals, apps, topJob] = await Promise.all([
+      db.query(
+        `SELECT COUNT(*)::int                                           as total_posts,
+                COALESCE(SUM(CASE WHEN is_active    THEN 1 END),0)::int as active_posts,
+                COALESCE(SUM(CASE WHEN job_type='URGENTE'  THEN 1 END),0)::int as urgente,
+                COALESCE(SUM(CASE WHEN job_type='EMPLEO'   THEN 1 END),0)::int as empleo,
+                COALESCE(SUM(CASE WHEN job_type='PRACTICA' THEN 1 END),0)::int as practica
+         FROM jobs WHERE company_id=$1`,
+        [companyId]
+      ),
+      db.query(
+        `SELECT COUNT(a.id)::int as total,
+                COALESCE(SUM(CASE WHEN a.status='ACEPTADO' THEN 1 END),0)::int as accepted
+         FROM applications a
+         JOIN jobs j ON a.job_id = j.id
+         WHERE j.company_id=$1`,
+        [companyId]
+      ),
+      db.query(
+        `SELECT j.title, COUNT(a.id)::int as cnt
+         FROM jobs j
+         LEFT JOIN applications a ON a.job_id = j.id
+         WHERE j.company_id=$1
+         GROUP BY j.id, j.title
+         ORDER BY cnt DESC LIMIT 1`,
+        [companyId]
+      ),
+    ]);
+
+    const t = totals.rows[0];
+    const a = apps.rows[0];
+    res.json({
+      total_posts:      t.total_posts,
+      active_posts:     t.active_posts,
+      total_applicants: a.total,
+      accepted:         a.accepted,
+      by_type: {
+        URGENTE:  t.urgente,
+        EMPLEO:   t.empleo,
+        PRACTICA: t.practica,
+      },
+      top_job: topJob.rows[0]?.title ?? null,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -122,8 +163,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { title, description, job_type, category,
-            city, requires_cv, min_experience,
-            address, problem_description } = req.body;
+            city, requires_cv, min_experience } = req.body;
 
     let comp = await db.query(
       'SELECT id FROM company_profiles WHERE user_id = $1', [req.user.id]
@@ -140,12 +180,10 @@ router.post('/', auth, async (req, res) => {
 
     const result = await db.query(
       `INSERT INTO jobs
-       (company_id, title, description, job_type, category, city,
-        requires_cv, min_experience, address, problem_description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+       (company_id, title, description, job_type, category, city, requires_cv, min_experience)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [comp.rows[0].id, title, description, job_type, category,
-       city, requires_cv || false, min_experience || 0,
-       address || '', problem_description || '']
+       city, requires_cv || false, min_experience || 0]
     );
 
     const { notificarCandidatos } = require('../services/fcm');
