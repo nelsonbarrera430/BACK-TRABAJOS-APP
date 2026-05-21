@@ -56,4 +56,46 @@ async function notificarCandidatos(category, city, job) {
   }
 }
 
-module.exports = { notificarCandidatos };
+async function notificarAceptado(candidateId, jobTitle) {
+  try {
+    const result = await db.query(
+      `SELECT dt.fcm_token
+       FROM device_tokens dt
+       JOIN candidate_profiles cp ON cp.user_id = dt.user_id
+       WHERE cp.id = $1
+       LIMIT 1`,
+      [candidateId]
+    );
+
+    const token = result.rows[0]?.fcm_token;
+    if (!token) {
+      console.log(`⚠️ Sin token FCM para candidato ${candidateId}`);
+      return;
+    }
+
+    const admin = require('firebase-admin');
+    if (!admin.apps.length) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    }
+
+    await admin.messaging().send({
+      token,
+      notification: {
+        title: '🎉 ¡Felicitaciones!',
+        body: `Fuiste seleccionado para: ${jobTitle}`,
+      },
+      data: { type: 'ACEPTADO', job_title: jobTitle },
+      android: {
+        notification: { sound: 'default', priority: 'high' },
+        priority: 'high',
+      },
+    });
+
+    console.log(`✅ Notificación de aceptación enviada al candidato ${candidateId}`);
+  } catch (err) {
+    console.log('⚠️ Error notificando aceptado:', err.message);
+  }
+}
+
+module.exports = { notificarCandidatos, notificarAceptado };
