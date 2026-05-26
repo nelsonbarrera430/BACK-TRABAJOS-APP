@@ -9,28 +9,32 @@ async function analizarCandidatos(candidatos, vacante) {
   }
 
   try {
-    const prompt = `Eres experto en selección de personal. Analiza estos candidatos para el puesto: ${vacante.title}.
+    const prompt = `Eres experto en selección de personal. Analiza y puntúa estos candidatos para el puesto: ${vacante.title}.
 Categoría: ${vacante.category}
 
-CRITERIOS DE EVALUACIÓN (en orden de importancia):
-1. Rating de empleadores anteriores (1-5 estrellas) — indica historial real de trabajo
-2. Años de experiencia en el área
-3. Descripción/resumen del candidato
+CRITERIOS DE EVALUACIÓN Y PESO:
+1. Rating de empleadores anteriores (40%) — si tiene calificaciones reales, es la señal más confiable. Sin calificaciones parte neutro en 50pts.
+2. Años de experiencia (25%) — más años en el área = mayor puntaje
+3. Descripción/resumen (20%) — si tiene info detallada sobre su experiencia es positivo; si está vacío, resta
+4. Hoja de vida adjunta (15%) — tener CV subido es señal de seriedad y profesionalismo
 
 CANDIDATOS:
 ${candidatos.map((c, i) => {
   const rating = c.rating || 0;
   const reviews = c.total_reviews || 0;
   const ratingLabel = reviews > 0
-    ? `${rating}/5 ⭐ (${reviews} calificación${reviews !== 1 ? 'es' : ''})`
-    : 'Sin calificaciones aún';
-  return `${i}. ${c.full_name || 'Sin nombre'} | ${c.years_experience || 0} años exp | rating: ${ratingLabel} | info: ${c.summary || 'ninguna'}`;
+    ? `${rating}/5 ⭐ con ${reviews} calificación${reviews !== 1 ? 'es' : ''} reales`
+    : 'Sin calificaciones previas (nuevo en la plataforma)';
+  const cvLabel = c.has_cv ? 'Sí tiene hoja de vida adjunta' : 'Sin hoja de vida';
+  const summaryLabel = (c.summary || '').trim().length > 10
+    ? `"${c.summary}"` : 'Sin descripción';
+  return `${i}. ${c.full_name || 'Sin nombre'} | Experiencia: ${c.years_experience || 0} años | Rating: ${ratingLabel} | CV: ${cvLabel} | Info: ${summaryLabel}`;
 }).join('\n')}
 
 Responde ÚNICAMENTE con este JSON exacto, sin texto adicional ni markdown:
-{"candidatos":[{"indice":0,"score":85,"razon":"razón corta en español"}]}
+{"candidatos":[{"indice":0,"score":85,"razon":"razón corta en español de máximo 15 palabras"}]}
 
-Donde score va de 0 a 100. Un candidato con rating 5/5 debe recibir bonus significativo en el score.`;
+Donde score va de 0 a 100. Ordena mentalmente del más apto al menos apto.`;
 
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
