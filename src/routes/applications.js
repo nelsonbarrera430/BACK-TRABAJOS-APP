@@ -81,7 +81,7 @@ router.get('/company/:jobId', auth, async (req, res) => {
     const result = await db.query(
       `SELECT a.id, a.job_id, a.candidate_id, a.cv_url, a.status,
               a.response_message, a.created_at,
-              a.ai_score, a.ai_feedback,
+              a.ai_score, a.ai_feedback, a.ai_feedback as ai_razon,
               cp.full_name, cp.years_experience, cp.rating,
               cp.total_reviews, cp.summary, cp.job_category, cp.city,
               cp.cv_url as profile_cv, u.id as user_id, u.email
