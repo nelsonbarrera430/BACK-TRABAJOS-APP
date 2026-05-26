@@ -9,32 +9,49 @@ async function analizarCandidatos(candidatos, vacante) {
   }
 
   try {
-    const prompt = `Eres experto en selección de personal. Analiza y puntúa estos candidatos para el puesto: ${vacante.title}.
-Categoría: ${vacante.category}
+    const prompt = `Eres un experto en selección de personal. Tu tarea es puntuar del 0 al 100 a cada candidato para el puesto de: ${vacante.title}.
 
-CRITERIOS DE EVALUACIÓN Y PESO:
-1. Rating de empleadores anteriores (40%) — si tiene calificaciones reales, es la señal más confiable. Sin calificaciones parte neutro en 50pts.
-2. Años de experiencia (25%) — más años en el área = mayor puntaje
-3. Descripción/resumen (20%) — si tiene info detallada sobre su experiencia es positivo; si está vacío, resta
-4. Hoja de vida adjunta (15%) — tener CV subido es señal de seriedad y profesionalismo
+Para calcular el puntaje sumá estos 3 factores:
 
-CANDIDATOS:
+FACTOR 1 — Calificación promedio de empleadores anteriores (hasta 50 puntos):
+  • Sin ninguna calificación real → 0 puntos en este factor (es un desconocido)
+  • Con calificaciones reales: (promedio / 5) × 50 puntos
+  • Ejemplo: 3/5 estrellas reales → (3/5)×50 = 30 pts. Eso ya supera a cualquiera sin calificación.
+
+FACTOR 2 — Años de experiencia (hasta 30 puntos):
+  • 0 años → 0 pts
+  • 1 año → 10 pts
+  • 2 años → 17 pts
+  • 3 años → 22 pts
+  • 5+ años → 30 pts
+  • Interpolá para valores intermedios.
+
+FACTOR 3 — Análisis de la descripción personal (hasta 20 puntos):
+  • Sin descripción → 0 pts
+  • Descripción vaga o muy corta → 5 pts
+  • Descripción que menciona experiencia concreta relevante para "${vacante.title}" → 10-15 pts
+  • Descripción detallada, profesional y muy relevante para el puesto → 20 pts
+  • Leé el texto y evaluá su calidad y relevancia real.
+
+Bonus: tener CV adjunto suma +5 puntos al total final (puede superar 100, recortá a 100).
+
+CANDIDATOS A EVALUAR:
 ${candidatos.map((c, i) => {
-  const rating = c.rating || 0;
+  const rating  = parseFloat(c.rating) || 0;
   const reviews = c.total_reviews || 0;
   const ratingLabel = reviews > 0
-    ? `${rating}/5 ⭐ con ${reviews} calificación${reviews !== 1 ? 'es' : ''} reales`
-    : 'Sin calificaciones previas (nuevo en la plataforma)';
-  const cvLabel = c.has_cv ? 'Sí tiene hoja de vida adjunta' : 'Sin hoja de vida';
-  const summaryLabel = (c.summary || '').trim().length > 10
-    ? `"${c.summary}"` : 'Sin descripción';
-  return `${i}. ${c.full_name || 'Sin nombre'} | Experiencia: ${c.years_experience || 0} años | Rating: ${ratingLabel} | CV: ${cvLabel} | Info: ${summaryLabel}`;
-}).join('\n')}
+    ? `Promedio ${rating.toFixed(1)}/5 estrellas con ${reviews} calificación${reviews !== 1 ? 'es' : ''} reales`
+    : 'Sin calificaciones de empleadores';
+  const cvLabel = c.has_cv ? 'Tiene CV adjunto' : 'Sin CV';
+  const desc = (c.summary || '').trim();
+  const descLabel = desc.length > 0 ? `"${desc}"` : '(sin descripción)';
+  return `[${i}] ${c.full_name || 'Sin nombre'}\n    Experiencia: ${c.years_experience || 0} años\n    Calificación: ${ratingLabel}\n    CV: ${cvLabel}\n    Descripción: ${descLabel}`;
+}).join('\n\n')}
 
 Responde ÚNICAMENTE con este JSON exacto, sin texto adicional ni markdown:
-{"candidatos":[{"indice":0,"score":85,"razon":"razón corta en español de máximo 15 palabras"}]}
+{"candidatos":[{"indice":0,"score":85,"razon":"razón en español máximo 12 palabras"}]}
 
-Donde score va de 0 a 100. Ordena mentalmente del más apto al menos apto.`;
+Calculá el score de cada candidato sumando los 3 factores. El score final refleja quién es más confiable y apto para el puesto.`;
 
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
